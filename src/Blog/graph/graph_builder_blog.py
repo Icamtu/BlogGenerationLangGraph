@@ -12,6 +12,21 @@ import time
 from src.Blog.logging.logging_utils import logger, log_entry_exit
 
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
+
+
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+# Define the modelcls
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+
+
+
 
 class ReviewFeedback(BaseModel):
     approved: bool = Field(description="Approval status: True for approved, False for rejected")
@@ -68,3 +83,6 @@ class BlogGraphBuilder:
         except Exception as e:
             logger.error(f"Error building graph: {e}")
             raise
+
+Blog_builder_instance = BlogGraphBuilder(model)
+agent = Blog_builder_instance.build_graph()

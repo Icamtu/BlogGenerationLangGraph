@@ -13,18 +13,6 @@ class GraphBuilder:
         self.blog_builder = BlogGraphBuilder(self.llm, self.memory)
         
 
-    def validate_and_standardize_structure(self, user_input: str) -> list:
-        """
-        Uses an LLM to interpret user input and generate a standardized list of blog section names.
-        Ensures the user's specified structure is respected if provided.
-
-        Args:
-            user_input (str): The full user input from the Streamlit form (e.g., "Topic: AI\nStructure: Intro, Benefits, Summary").
-
-        Returns:
-            List[str]: A list of standardized section names (e.g., ["Intro", "Benefits", "Summary"]).
-        """
-        return self.blog_builder.validate_and_standardize_structure(user_input)
 
     def setup_graph(self, usecase: str):
         """

@@ -12,6 +12,7 @@ class State(TypedDict):
 class Section(BaseModel):
     name: str = Field(description="Name for this section of the report.")
     description: str = Field(description="Brief overview of the main topics and concepts to be covered in this section.")
+    approximate_word_count: int = Field(default=0, description="Target word count for this section.")
 
 class Sections(BaseModel):
     sections: List[Section] = Field(description="Sections of the report.")

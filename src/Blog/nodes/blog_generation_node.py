@@ -6,139 +6,54 @@ import streamlit as st
 import json
 from datetime import datetime
 from typing import List
-
-# Assume src/Blog/logging/logging_utils.py exists and defines logger and log_entry_exit
-# For demonstration, a simple mock:
-class LoggerMock:
-    def info(self, msg):
-        print(f"INFO: {msg}")
-    def warning(self, msg):
-        print(f"WARNING: {msg}")
-    def error(self, msg):
-        print(f"ERROR: {msg}")
-
-logger = LoggerMock()
-
-def log_entry_exit(func):
-    """Decorator to log function entry and exit."""
-    import functools
-    def wrapper(*args, **kwargs):
-        # Determine the class name if it's a method
-        if args and hasattr(args[0], '__class__'):
-            class_name = args[0].__class__.__name__
-            func_name = f"{class_name}.{func.__name__}"
-        else:
-            func_name = func.__name__
-
-        logger.info(f"Entering {func_name}")
-        start_time = datetime.now()
-        try:
-            result = func(*args, **kwargs)
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            logger.info(f"Exiting {func_name} (took {duration:.2f} seconds)")
-            return result
-        except Exception as e:
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            logger.error(f"Error in {func_name}: {e} (took {duration:.2f} seconds)")
-            raise
-    return wrapper
-
-
+from src.Blog.logging.logging_utils import logger, log_entry_exit
 class BlogGenerationNode:
     def __init__(self, model):
         """Initialize the BlogGenerationNode with an LLM."""
         self.llm = model
-        # self.planner expects a structured output of type Sections
-        # Make sure your LLM supports structured output (e.g., OpenAI functions, Pydantic)
         self.planner = model.with_structured_output(Sections)
 
     @log_entry_exit
     def validate_and_standardize_structure(self, user_input: str) -> List[str]:
         """
-        Uses an LLM to interpret user input and generate a standardized list of blog section names.
-        Ensures the user's specified structure is respected if provided.
-
-        Args:
-            user_input (str): The full user input from the Streamlit form (e.g., "Topic: AI\nStructure: Intro, Benefits, Summary").
-
-        Returns:
-            List[str]: A list of standardized section names (e.g., ["Intro", "Benefits", "Summary"]).
+        Parse the user input for section structure. If not found, use an LLM to extract/guess structure.
+        Always returns a cleaned list of section names.
         """
-        # Default structure if all else fails
         default_structure = ["Introduction", "Main Content", "Conclusion"]
 
-        # If input is empty or whitespace-only, return default
         if not user_input or not user_input.strip():
-            logger.info("Empty or whitespace-only input; returning default structure")
             return default_structure
 
-        # Extract the user's structure if provided
-        user_structure_str = None
-        for line in user_input.split("\n"):
-            if line.lower().startswith("structure:"):
-                user_structure_str = line.split(":", 1)[1].strip()
-                break
-
-        if not user_structure_str:
-            logger.info("No structure provided in user input; returning default structure")
-            return default_structure
-
-        # Define the prompt for the LLM
-        system_prompt = (
-            "You are an expert blog planner. Your task is to analyze the user's input and extract or infer a clear, concise structure "
-            "for a blog post as a list of section names. The input may explicitly list sections (e.g., 'Structure: Intro, Benefits, Summary') "
-            "or describe them implicitly (e.g., 'I want an intro, some benefits, and a conclusion'). "
-            "If the user provides a 'Structure' field (e.g., 'Structure: Intro, Benefits, Summary'), you MUST use those exact section names "
-            "without modification, except for capitalizing the first letter of each section. "
-            "If no structure is provided or it's unclear, propose a logical default structure based on the topic or context. "
-            "Return the result as a JSON object with a single key 'sections' containing the list of section names. "
-            "Capitalize each section name and avoid adding unnecessary sections beyond what’s indicated."
+        # Try to extract structure from user input
+        user_structure_str = next(
+            (line.split(":", 1)[1].strip()
+            for line in user_input.split("\n")
+            if line.lower().startswith("structure:")),
+            None,
         )
 
-        # Prepare messages for the LLM
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"User input structure request: {user_structure_str}")
-        ]
+        if user_structure_str:
+            # Clean and return user-given structure
+            return [s.strip().capitalize() for s in user_structure_str.split(",") if s.strip()]
 
+        # If not structured, ask LLM if available
+        system_prompt = (
+            "Given user input, extract a clear list of blog section names as JSON: "
+            '{"sections": ["Section1", "Section2", "..."]} Capitalize each. Propose a logical structure if needed.'
+        )
         try:
-            # Invoke the LLM and expect a JSON response
-            # Note: self.llm is used here, not self.planner, because we're not expecting the full Sections Pydantic model yet,
-            # just a list of strings as JSON.
-            response = self.llm.invoke(messages)
-            response_content = response.content if hasattr(response, "content") else str(response)
-            logger.info(f"LLM response for structure: {response_content}")
-
-            # Parse the JSON response
-            # Ensure the response is parsable JSON, and specifically look for a 'sections' key holding a list.
-            result = json.loads(response_content)
-            sections_from_llm = result.get("sections")
-
-            # Validate and standardize the output from LLM
-            if not isinstance(sections_from_llm, list) or not sections_from_llm:
-                logger.warning("LLM returned invalid or empty sections list; using default structure.")
-                return default_structure
-
-            # Clean up section names: strip whitespace, capitalize, remove empty strings
-            cleaned_llm_sections = [s.strip().capitalize() for s in sections_from_llm if s.strip()]
-
-            # If user provided a structure, enforce it, capitalizing each word.
-            user_sections_list = [s.strip().capitalize() for s in user_structure_str.split(",") if s.strip()]
-            if user_sections_list:
-                logger.info("User-provided structure found, enforcing it.")
-                return user_sections_list
-            
-            # Fallback to cleaned LLM sections if user_structure_str was empty after stripping
-            return cleaned_llm_sections if cleaned_llm_sections else default_structure
-
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decoding error in LLM structure generation: {e}. Response was: {response_content}")
-            return default_structure
+            response = self.llm.invoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_input)
+            ])
+            # Try to parse as JSON, otherwise fallback
+            result = json.loads(getattr(response, "content", str(response)))
+            sections = result.get("sections", [])
+            return [s.strip().capitalize() for s in sections if s.strip()] or default_structure
         except Exception as e:
-            logger.error(f"Error in LLM structure generation: {e}")
+            logger.warning(f"LLM error or bad JSON: {e}")
             return default_structure
+
 
     @log_entry_exit
     def user_input(self, state: State) -> dict:
@@ -385,7 +300,7 @@ class BlogGenerationNode:
         sections = state.get("sections", [])
         if not sections:
             logger.warning("No sections found to assign workers. Skipping parallel calls.")
-            return []
+            return []   
 
         
         passthrough_keys = [
@@ -413,27 +328,29 @@ class BlogGenerationNode:
     @log_entry_exit
     def llm_call(self, state: State) -> dict:
         """Worker writes a section of the report."""
-        # Ensure 'section' is present and is of type Section
         if "section" not in state or not isinstance(state["section"], Section):
             logger.error("llm_call received invalid or missing 'section' in state.")
             return {"completed_sections": state.get("completed_sections", [])}
 
         current_section: Section = state["section"]
-
+        
         system_message_content = (
             "You are an expert content writer for a blog. Your task is to write a single section of a blog post "
             "based on the provided section name and detailed description. "
+            "IMPORTANT: Do NOT include the section title/heading in your response. Do NOT start with the section name. "
             "Do NOT include any preambles (like 'Introduction to...', 'This section will cover...', 'Section X: Title'). "
-            "Just start directly with the content for this section. "
+            "Just write the actual content for this section directly. "
+            "The section title will be added separately by the system. "
             "Use clear, concise language appropriate for the target audience. "
-            "Format the content using Markdown. If it's a heading, use Markdown heading syntax (#, ##). "
-            f"The overall blog topic is: {state['topic']}. The objective is: {state['objective']}. "
-            f"The target audience is: {state['target_audience']}. The tone and style should be: {state['tone_style']}."
+            "Format the content using Markdown for emphasis, lists, etc., but do NOT include any headers (#, ##, ###). "
+            f"The overall blog topic is: {state.get('topic', 'UNKNOWN')}. The objective is: {state.get('objective', 'UNKNOWN')}. "
+            f"The target audience is: {state.get('target_audience', 'UNKNOWN')}. The tone and style should be: {state.get('tone_style', 'UNKNOWN')}."
         )
-
+        
         human_message_content = (
-            f"Write the content for the section titled '{current_section.name}'. "
-            f"Here is the detailed description for this section's content: '{current_section.description}'"
+            f"Write the content for the section that will be titled '{current_section.name}'. "
+            f"Here is the detailed description for this section's content: '{current_section.description}' "
+            f"Remember: Do NOT include the section title '{current_section.name}' in your response. Start directly with the content."
         )
 
         try:
@@ -442,14 +359,39 @@ class BlogGenerationNode:
                 HumanMessage(content=human_message_content)
             ])
             
-            # The section name itself can be a heading
-            formatted_section = f"## {current_section.name}\n\n{section_content.content}"
+            # Clean the content to remove any accidentally generated headers
+            content = section_content.content.strip()
+            
+            # Remove any headers that might have been generated by the LLM
+            lines = content.split('\n')
+            cleaned_lines = []
+            
+            for line in lines:
+                # Skip lines that are just the section name or header versions of it
+                if line.strip() and not (
+                    line.strip() == current_section.name or 
+                    line.strip().startswith('#') and current_section.name.lower() in line.lower()
+                ):
+                    cleaned_lines.append(line)
+                elif line.strip() and line.strip().startswith('#'):
+                    # If it's a header but not the main section title, keep it (sub-headers are ok)
+                    if current_section.name.lower() not in line.lower():
+                        cleaned_lines.append(line)
+            
+            # Join the cleaned content
+            cleaned_content = '\n'.join(cleaned_lines).strip()
+            
+            # Now add the section header properly
+            formatted_section = f"## {current_section.name}\n\n{cleaned_content}"
             
             logger.info(f"\n{'='*20}:llm_call output for '{current_section.name}':{'='*20}\nGenerated content (first 200 chars): {formatted_section[:200]}...\n{'='*20}\n")
             
-            # Append the new section content to the completed_sections list
-            # LangGraph's add_messages annotation handles the appending correctly.
-            return {"completed_sections": [formatted_section]} # return as list so add_messages appends
+            return {"completed_sections": [formatted_section]}
+            
+        except Exception as e:
+            logger.error(f"Error generating section '{current_section.name}' with LLM: {e}")
+            return {"completed_sections": [f"## {current_section.name}\n\nError generating section '{current_section.name}': {e}"]}
+
 
         except Exception as e:
             logger.error(f"Error generating section '{current_section.name}' with LLM: {e}")
