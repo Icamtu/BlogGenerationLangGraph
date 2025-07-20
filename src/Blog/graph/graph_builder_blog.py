@@ -39,10 +39,7 @@ class BlogGraphBuilder:
 
     @log_entry_exit
     def build_graph(self):
-        """
-        Builds a graph for the Blog Generation use case.
-        Focuses on reliable checkpointing by adjusting interrupt timing.
-        """
+        """Builds a graph for the Blog Generation use case."""
         try:
             if not self.llm:
                 raise ValueError("LLM model not initialized")
@@ -56,33 +53,36 @@ class BlogGraphBuilder:
             graph_builder.add_node("llm_call", blog_node.llm_call)
             graph_builder.add_node("synthesizer", blog_node.synthesizer)
             graph_builder.add_node("feedback_collector", blog_node.feedback_collector)
+            graph_builder.add_node("revise_blog", blog_node.revise_blog)
             graph_builder.add_node("file_generator", blog_node.file_generator)
 
-
             # Add edges
-            graph_builder.add_edge(START,"user_input")
+            graph_builder.add_edge(START, "user_input")
             graph_builder.add_edge("user_input", "orchestrator")
             graph_builder.add_conditional_edges("orchestrator", lambda state: blog_node.assign_workers(state), ["llm_call"])
             graph_builder.add_edge("llm_call", "synthesizer")
             graph_builder.add_edge("synthesizer", "feedback_collector")
-
-            # Restore original conditional edges for feedback
+            
+            # CONDITIONAL EDGES
             graph_builder.add_conditional_edges(
                 "feedback_collector",
                 blog_node.route_feedback,
                 {
-                    "orchestrator": "orchestrator",
-                    "file_generator": "file_generator"
+                    "file_generator": "file_generator",
+                    "revise_blog": "revise_blog"
                 }
             )
-
+            
+            graph_builder.add_edge("revise_blog", "feedback_collector")
             graph_builder.add_edge("file_generator", END)
 
+            compiled_graph = graph_builder.compile(interrupt_before=["feedback_collector"], checkpointer=self.memory)
+            return compiled_graph
 
-            return graph_builder.compile(interrupt_before=["feedback_collector"], checkpointer=self.memory)
         except Exception as e:
             logger.error(f"Error building graph: {e}")
             raise
+
 
 Blog_builder_instance = BlogGraphBuilder(model)
 agent = Blog_builder_instance.build_graph()

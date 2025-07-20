@@ -12,7 +12,7 @@ class State(TypedDict):
 class Section(BaseModel):
     name: str = Field(description="Name for this section of the report.")
     description: str = Field(description="Brief overview of the main topics and concepts to be covered in this section.")
-    approximate_word_count: int = Field(default=0, description="Target word count for this section.")
+    
 
 class Sections(BaseModel):
     sections: List[Section] = Field(description="Sections of the report.")
@@ -26,7 +26,6 @@ class BlogState(TypedDict):
     objective: str  # Objective from user input
     target_audience: str  # Target audience from user input
     tone_style: str  # Tone/style from user input
-    word_count: int  # Word count from user input
     structure: str  # Structure from user input
     feedback: str  # Human feedback
 
@@ -38,4 +37,10 @@ class BlogState(TypedDict):
     initial_draft: str  # Initial draft of the report
     final_report: str  # Final report
     draft_approved: bool  # Whether the draft is approved
+    blog_title: str  # Title of the blog post
+
+
+    original_draft: str      # Store the first generated draft
+    draft_version: int       # Track revision count
+    draft_history: List[str] # Store all draft versions
 

@@ -93,7 +93,7 @@ class DisplayBlogResult:
                 if tone_style == "Other":
                     custom_tone = st.text_input("Specify Tone & Style")
 
-                word_count = st.number_input("Word Count", min_value=100, max_value=5000, value=100, step=100)
+                
                 structure = st.text_area("Structure", placeholder="e.g., Introduction, Key Points, Conclusion")
 
                 submit_button = st.form_submit_button("Next")
@@ -114,7 +114,7 @@ class DisplayBlogResult:
                     # Create message and add to history
                     message = HumanMessage(content=f"Topic: {topic}\nObjective: {objective}\n"
                                                     f"Target Audience: {target_audience}\nTone & Style: {tone_style}\n"
-                                                    f"Word Count: {word_count}\nStructure: {structure}\n"
+                                                    f"Structure: {structure}\n"
                                                     f"feedback: {st.session_state.get('feedback')}")
                     self.session_history.append(message)
                     st.session_state.blog_requirements_collected = True
@@ -249,8 +249,23 @@ class DisplayBlogResult:
         
         st.markdown("## Stage 3: Feedback")
         if st.session_state.get("generated_draft"):
-            st.markdown("### Drafted Blog Content:")
-            st.markdown(st.session_state["generated_draft"])
+            original_draft = st.session_state.get("original_draft", "")
+            current_draft = st.session_state.get("generated_draft")
+            draft_version = st.session_state.get("draft_version", 1)
+            
+            if original_draft and draft_version > 1:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("### Original Draft (v1):")
+                    st.markdown(original_draft[:500] + "..." if len(original_draft) > 500 else original_draft)
+                
+                with col2:
+                    st.markdown(f"### Current Draft (v{draft_version}):")
+                    st.markdown(current_draft)
+            else:
+                st.markdown("### Current Draft:")
+                st.markdown(current_draft)
             
         with st.expander("Stage 3: Feedback", expanded=True):
             feedback_text = st.text_input(
@@ -337,7 +352,7 @@ class DisplayBlogResult:
                         st.session_state["feedback"] = feedback_result.comments
                         st.session_state.current_stage = "processing_feedback"
                         st.session_state['feedback_result'] = None
-                        st.session_state["generated_draft"] = None
+                        # st.session_state["generated_draft"] = None
                         st.session_state["completed_sections"] = None
                         logger.info(f"{'='*20}\n:session state after revision request:\n {st.session_state}{'='*20}")
                         st.rerun()
