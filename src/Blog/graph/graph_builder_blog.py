@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage
 import logging
 import json
-import logging
 import functools
 import time
 from src.Blog.logging.logging_utils import logger, log_entry_exit

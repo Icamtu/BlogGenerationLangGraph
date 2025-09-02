@@ -50,7 +50,7 @@ src/
 ### Running the App
 1. Start the Streamlit UI:
    ```bash
-   streamlit run src/Blog/ui/streamlit/display_result_blog.py
+   streamlit run app.py
    ```
 2. Follow the prompts to enter blog requirements and feedback.
 

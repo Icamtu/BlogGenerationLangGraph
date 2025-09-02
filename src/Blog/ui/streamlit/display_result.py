@@ -5,7 +5,6 @@ import json
 from datetime import datetime
 import base64
 from src.Blog.ui.streamlit.display_result_blog import DisplayBlogResult
-import logging
 import functools
 import time
 

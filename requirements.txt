@@ -9,7 +9,6 @@ langchain_xai
 faiss-cpu
 streamlit
 graphviz
-langgraph
 langgraph-cli[inmem]
 typing-extensions>=4.7.0
 markdown
